@@ -1,0 +1,156 @@
+---
+layout: post
+title: 阿里云配置https的ssl证书和CloudFlare的CDN反向代理https服务
+date: 2019-12-05
+Author: 来自中国.上海
+categories: Linux
+tags: markdown
+comments: true
+---
+
+本篇博客主要介绍HTTP和HTTPS的区别，使用阿里云免费的https的ssl证书(需要备案)，以及使用CloudFlare的https服务(不提供ssl证书，域名不需要备案，同样有绿色的锁https服务)
+
+
+
+## 明文传输的http和密文传输的https
+
+
+
+### 1. http和https的区别
+
+ *  http是超文本传输协议，信息是明文传输，https则是具有安全性的ssl加密的传输协议.
+
+* http和https使用的是完全不同的连接方式，用的端口号也不一样，前者是80，后者是443.
+
+* http的连接方式很简单，是无状态的；https协议是由SSL+HTTP协议构建的可进行加密传输、身份验证的网络协议，比http协议安全.
+
+  ​	[百度]参考文档(https://baijiahao.baidu.com/s?id=1629455363537331894&wfr=spider&for=pc/ "百度")
+
+  ​	https://baijiahao.baidu.com/s?id=1629455363537331894&wfr=spider&for=pc
+
+## 阿里云Centos7.5系统
+
+​	
+
+### 2.阿里云的apche服务器配置ssl证书
+
+​	阿里云的服务器配置ssl证书，首先需要在阿里云官网申请免费的ssl证书，再根据文档配置
+
+
+
+	#### 购买ssl免费证书并下载
+
+ * 首先来到阿里云官网->来到域名列表->点击[管理]->点击[免费开启SSL证书]->点击[返回证书列表]
+ * 点击购买证书->选择免费版(个人) DV->购买成功
+ * 点击证书申请->填入相关的数据->基本配置完成
+ * 最后记得开启服务器的443端口噢
+
+#### 配置ssl证书到apache服务器
+
+​	1) 远程连接你的服务器，安装SSL模块
+
+​		yum install mod_ssl -y
+
+​	2) 建一个目录，存放刚才下载的证书
+
+​		mkdir /etc/httpd/ssl/	
+
+​	3) 修改Apache的配置文件
+
+​		vim /etc/httpd/conf/httpd.conf
+
+​	修改如下：
+
+​		* LoadModule ssl_module modules/mod_ssl.so
+
+​	 	删除行首的配置语句注释符号“#”加载mod_ssl.so模块启用SSL服务，Apache默认是不启用该模块的。如果找不到该配置，请重新编译mod_ssl模块
+
+​		* Include conf/extra/httpd-ssl.conf   删除行首的配置语句注释符号“#”
+
+​		注意：这里有个坑，如果在 /etc/httpd/conf/httpd.conf文件里面有那最好不过了，如果没有就有点烦人，不过问题不大.
+
+​		* 查看httpd.conf文件有一个Include conf.modules.d/*.conf 这里是加载口，我们顺着这个加载口进入conf.modules.d文件夹里面，ls 查看发现有一个 00-ssl.conf，vim打开这个文件，发现我们原来上面需要打开而找不到的文件竟然在这！！！至此问题就解决了。打开前面呢的# 
+
+4) 保存退出，然后编辑ssl配置文件，修改内容如下 
+
+~~~
+      SSLProtocol all -SSLv2 -SSLv3    
+      # 添加SSL协议支持协议，去掉不安全的协议。
+      SSLCipherSuite HIGH:!RC4:!MD5:!aNULL:!eNULL:!NULL:!DH:!EDH:!EXP:+MEDIUM    
+      # 使用此加密套件。
+
+      DocumentRoot "/var/www/html"  #网页文件路径
+
+      ServerName www.qsdsx.top:443  #改为自己的域名,  这里切记是 域名：443
+
+      SSLEngine on  #启用SSL功能
+      
+      SSLHonorCipherOrder on
+
+      SSLCertificateFile   /etc/httpd/ssl/2_www.**.cn.crt   #填写证书文件路径
+
+      SSLCertificateKeyFile   /etc/httpd/ssl/3_www.***.cn.key  #填写私钥文件路径
+
+      SSLCertificateChainFile   /etc/httpd/ssl/1_root_bundle.crt  #填写证书链文件路径
+   
+~~~
+
+
+
+​	5) 重启Apahce服务器
+
+​		systemctl restart httpd.service
+
+​	6) 至此基本完成：你用https://www.qsdsx.top访问网站，就会出现绿色锁的图标，但是你直接输入www.qsdsx.top时候还是访问的http服务。所以下面就是让访问http强制跳到访问的https服务
+
+​	7) 设置HTTP请求自动跳转HTTPS
+
+​		在httpd.conf文件中加入apache重写规则找到下面的<VirtualHost *:80> </VirtualHost>添加：
+
+​		<VirtualHost *:80> 
+
+​			RewriteEngine on
+
+​			RewriteCond %{SERVER_PORT} !^443$
+
+​			RewriteRule ^(.*)$ https://%{SERVER_NAME}$1 [L,R]
+
+​		</VirtualHost>
+
+亲测 二者文档结合起来看搞出来https
+
+参考阿里云文档：https://help.aliyun.com/document_detail/98727.html?spm=5176.2020520163.0.0.6403oG9roG9rqA
+
+参考CSDN文档：https://blog.csdn.net/Cheny_Yang/article/details/88974986
+
+​		
+
+## CloudFlare免费的https服务
+
+​	Cloudflare位于美国旧金山，CloudFlare是一家CDN提供商，它提供了免费的https服务(但不是应用SSL证书)。实现模式就是，用户到CDN服务器的连接为https，而CDN服务器到GithubPage服务器的连接为http，即在CDN服务器加上反向代理。
+
+### 3.CloudFlare的CND反向代理https服务
+
+​	1) 首先注册账号密码
+
+​	2) Add your site  #添加我们的域名
+
+​	3) 点击NEXT，选择免费的Free
+
+​	4) 点击Continue
+
+​	5) 设置DNS
+
+  * 在 CloudFlare 的 DNS 设置域名匹配到自己的GithubPage(启用动态DNS加速)。
+* 在 CloudFlare 的 Crypto 设置 SSL 为 Flexible 并设置Always use HTTPS为开启状态
+
+​	6) 有两条DNS代理，最后去自己的域名注册商那边，修改那边的DNS为CloudFlare的DNS
+
+​		bella.ns.cloudflare.com
+
+​		derek.ns.cloudflare.com
+
+​	7) 注意：CloudFlare审核需要时间，不要着急耐心等等就好了.
+
+参考文档链接：https://www.jianshu.com/p/653b5682e2bd
+
