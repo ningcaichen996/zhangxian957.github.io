@@ -4,7 +4,7 @@
       {% if site.avatar %}
         <a href="{{ site.baseurl }}/" class="site-avatar"><img src="{{ site.avatar }}" /></a>
       {% endif %} 
-      <h1 class="site-name"><a href="{{ site.baseurl }}/">{{ site.name }}</a></h1>
+      <h1 id="show" class="site-name"><a href="{{ site.baseurl }}/">{{ site.name }}</a></h1>
       <p class="site-description">{{ site.description }}</p>
     </div>
   </header>
@@ -27,3 +27,29 @@
     </footer>
   </div>
 </div>
+
+<script>
+    // 定时器 写循环出来
+        var string = '这个世界需要更多英雄~';
+        var i = 0;
+        setInterval(function (){
+            // 如果下标超过字串长度 则重置为0
+            if (i >= string.length) i = 0;
+            // 
+            console.log(i);
+            document.getElementById('show').innerHTML = show(string, i);
+            i++;
+        }, 300);
+
+
+        function show(str, i) {
+            var tmp = '';
+            // 变前
+            tmp += str.substr(0,i);
+            // 变中
+            tmp += '<font color="#46A3FF" size="7">'+str[i]+'</font>';
+            // 变后
+            tmp += str.substr(i+1);
+            return tmp;
+        }
+</script>
